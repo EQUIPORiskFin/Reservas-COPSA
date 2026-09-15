@@ -281,3 +281,165 @@ Prima_tarifa_d = function(P1,tabla,tasa,CA){
   P2 = factor*P1$prima_riesgo
   return(c(P2,P,CA1))
 }
+##################################
+################################Reservas RRC BEL
+#############################################3
+################################################
+BEL = function(P1,tabla,corte, anual = 0){
+  edad = P1$Edad
+  if(P1$Producto == "Dotal"){
+    cancelacion = read_excel("C:/Users/agarciadeleon/R_Studio/CSV/proyecto/RR4/Reservas/Cancelacion.xlsx", 
+                             sheet = "Dotal")
+  }else if(P1$Producto == "Vitalicio"){
+    cancelacion = read_excel("C:/Users/agarciadeleon/R_Studio/CSV/proyecto/RR4/Reservas/Cancelacion.xlsx", 
+                             sheet = "vitalicio")
+  }else{
+    cancelacion = read_excel("C:/Users/agarciadeleon/R_Studio/CSV/proyecto/RR4/Reservas/Cancelacion.xlsx", 
+                             sheet = "temporal")
+  }
+  crt = P1$Temporalidad
+  tasa1 = 0.06
+  if(anual == 0){
+    tabla  =Mensualizar(tabla)
+    cancelacion =  Mensualizar_Canc(cancelacion)
+    prima = P1$PT_Niv/12
+    crt = crt*12
+    crt1 = (100-edad)*12
+    tasa1 = -1+(1+tasa1)^(1/12)
+  }else{
+    crt1 = 100-edad
+  prima = P1$PT_Niv}
+  ######
+  Resultado = data.frame(Edad = tabla$Edad)
+  Resultado$p = tabla$p
+  Resultado$q = tabla$q
+  Resultado$SA = P1$`Suma Asegurada`
+  Resultado$Prima_original = P1$PT_Niv
+  Resultado$PT = prima
+  suppressMessages({Resultado = Resultado%>%filter(Edad>=edad)})
+  Resultado$PT[1] = Resultado$PT[1] + 500
+  if(!is.na(crt)){
+    Resultado = Resultado[c(1:crt),]
+  }else{
+    Resultado = Resultado[c(1:crt1),]
+  }
+  Auxiliar2 = cancelacion
+  Auxiliar2 = Auxiliar2[c(1:length(Resultado$Edad)),]
+  Resultado$caducidad = Auxiliar2$Nacional
+  Resultado$tasa  =tasa1
+  Resultado$v = 1/(1+tasa1)
+  n = length(Resultado$Edad)
+  Resultado$v_venc = mapply(function(x,y){y^(x+1)},x = seq(from = 0, to = (n-1)), y = Resultado$v)
+  Resultado$v_ant = mapply(function(x,y){y^(x)},x = seq(from = 0, to = (n-1)), y = Resultado$v)
+  Resultado$pcanc = Resultado$p * (1-Resultado$caducidad)
+      n=length(Resultado$q)
+      Resultado$p_t = 1
+      Resultado$p_tau = 1
+      for(k in 2:n){
+        Resultado$p_t[k] = Resultado$p_t[k-1]*Resultado$p[k-1]
+        Resultado$p_tau[k] =  Resultado$p_tau[k-1]*Resultado$pcanc[k-1]
+      }
+Resultado$GA = P1$GA
+Resultado$CA = P1$CA
+Resultado$FE_sin = Resultado$SA * Resultado$q * Resultado$p_t
+Resultado$VPE_sin = 0
+
+for(k in 1:n){
+  R <- Resultado$v_venc[1:(n-k+1)] *
+    Resultado$FE_sin[k:n]
+  Resultado$VPE_sin[k] <- sum(R)
+}
+if(P1$Producto == "Temporal"){
+  Resultado$Dotal = 0
+  Resultado$v_100 = 0
+  Resultado$SADotal = 0
+  Resultado$VPE_dotal = 0
+}else{
+Resultado$Dotal = 0
+Resultado$v_100 = 1
+for(k in 1:n){
+  R <-prod(Resultado$p[k:n]) #Resultado$v_venc[n-k+1] #* Resultado$SA[k]
+  Resultado$Dotal[k] <- R
+  Resultado$SADotal[k] <- Resultado$Dotal[k] * Resultado$SA[k]
+  Resultado$v_100[k] = (Resultado$v[k])^(n-k)
+  #Resultado$VPE_dotal[k] <- R
+}
+Resultado$VPE_dotal = Resultado$SADotal*Resultado$v_100
+}
+for(k in 1:n){
+  R <- Resultado$v_venc[1:(n-k+1)] *
+    Resultado$FE_sin[k:n]
+  Resultado$VPE_sin[k] <- sum(R)
+}
+Resultado$FE_gtos = (Resultado$GA + Resultado$CA)*Resultado$PT* Resultado$p_tau
+Resultado$VPE_gtos = 0
+for(k in 1:n){
+  R <- Resultado$v_ant[1:(n-k+1)] *
+    Resultado$FE_gtos[k:n]
+  Resultado$VPE_gtos[k] <- sum(R)
+}
+Resultado$FE_ingresos = Resultado$PT* Resultado$p_tau
+Resultado$VPE_ingresos = 0
+for(k in 1:n){
+  R <- Resultado$v_ant[1:(n-k+1)] *
+    Resultado$FE_ingresos[k:n]
+  Resultado$VPE_ingresos[k] <- sum(R)
+}
+return(Resultado)
+}
+
+BEL_corte = function(P1,tabla,corte, anual = 0){
+  valuacion = corte
+  t = round(time_length(interval(P1$`Inicio de vigencia`,valuacion),"years"),2)
+  edad = P1$Edad
+  val = edad + t
+  l = list()
+  D = BEL(P1,tabla,corte, anual)
+  suppressMessages({ D = D  %>%
+    filter(Edad <= val) %>%
+    slice_max(Edad, n = 1)})
+   return(D)
+}
+
+Calcula_BEL <- function(Polisario, tabla, corte,anual =1){
+  suppressMessages({ Resultado <- lapply(
+    seq_len(nrow(Polisario)),
+    function(i)
+      BEL_corte(
+        Polisario[i, , drop = FALSE],
+        tabla,
+        corte,
+        anual
+      )
+  )})
+  Resultado <- bind_rows(Resultado)
+  Resultado = cbind(Polisario,Resultado)
+  
+  return(Resultado)
+}
+
+
+BEL_IRR = function(Polisario, tabla,Percentil, corte,anual  =1){
+  valuacion = corte
+  Res = Calcula_BEL(Polisario, tabla, corte,anual)
+  Res$BEL = Res$VPE_sin + Res$VPE_gtos + Res$VPE_dotal -Res$VPE_ingresos
+  Res$Suma_cedida = ifelse(Res$`Suma Asegurada`>=2000000,Res$`Suma Asegurada`-2000000,Res$`Suma Asegurada`)
+  Res$Porcentaje_cesion = Res$Suma_cedida/Res$`Suma Asegurada`
+  Res$Reas_cal = 1-0.0005
+  Dev = time_length(interval(valuacion,Res$fin_vigencia), "years")/time_length(interval(Res$`Inicio de vigencia`, Res$fin_vigencia), "years")
+  Res$Fact_NDev = Dev
+  Res$PTND = Res$Fact_NDev * Res$prima_riesgo
+  Res$IRR =Res$PTND * Res$Reas_cal * Res$Porcentaje_cesion
+  BEL_f =Res
+  ####Desviacion
+  tabla1 = Percentil
+  Res1 = Calcula_BEL(Polisario, tabla1, corte,anual)
+  Res1$BEL = Res1$VPE_sin + Res1$VPE_gtos + Res1$VPE_dotal -Res1$VPE_ingresos
+  BEL_Final_Percentil = Res1
+  BEL_f$BEL_PERCENTIL = Res1$BEL
+  Desviacion_Final = BEL_Final_Percentil$BEL -BEL_f$BEL
+  BEL_f$Desviacion = Desviacion_Final
+  Desviacion_Final = sum(Desviacion_Final)
+  BEL_f$Desviacion_Tot = Desviacion_Final
+  return(BEL_f)
+}
