@@ -285,6 +285,7 @@ Prima_tarifa_d = function(P1,tabla,tasa,CA){
 ################################Reservas RRC BEL
 #############################################3
 ################################################
+#################Tabla CNSF 2013 hasta edad 100
 ######En modo de muestra se encuentra una ruta local, se debe generar un repositorio y colocar la ruta respectiva
 BEL = function(P1,tabla,corte, anual = 0,ruta = "C:/Users/agarciadeleon/R_Studio/CSV/proyecto/RR4/Reservas/Cancelacion.xlsx"){
   edad = P1$Edad
