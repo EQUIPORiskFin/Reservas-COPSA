@@ -443,3 +443,41 @@ BEL_IRR = function(Polisario, tabla,Percentil, corte,anual  =1){
   BEL_f$Desviacion_Tot = Desviacion_Final
   return(BEL_f)
 }
+#####################
+#######################Métodos auxiliares para mensualizar tablas y cancelaciones.
+###############Mensualizar tabla de mortalidad
+Mensualizar <- function(tabla){
+  
+  tabla %>%
+    rowwise() %>%
+    do({
+      
+      q0 <- .$q
+      
+      tibble(
+        Edad = .$Edad + (0:11)/12,
+        q = rep(q0/12, 12)
+      )
+      
+    }) %>%
+    ungroup() %>%
+    mutate(p = 1 - q)
+}
+###################################
+##################Mensualizar cancelaciones
+Mensualizar_Canc <- function(cancelacion){
+  
+  cancelacion %>%
+    rowwise() %>%
+    do({
+      
+      q0 <- .$Nacional
+      
+      tibble(
+        `Año de vigencia` = .$`Año de vigencia` + (0:11)/12,
+        Nacional = rep(q0/12, 12)
+      )
+      
+    }) %>%
+    ungroup()
+}
