@@ -216,6 +216,7 @@ Prima_d = function(P1,tabla,tasa,cancelacion){
   edad = P1$Edad
   Auxiliar = tabla
   crt = P1$Temporalidad
+  crt = ifelse((100-edad)<crt,100-edad, crt)
   #Auxiliar2 = cancelacion$Nacional 
   desfase = edad + crt
   if(!is.na(crt)){
@@ -267,10 +268,16 @@ Prima_d = function(P1,tabla,tasa,cancelacion){
 #####################
 Prima_tarifa_d = function(P1,tabla,tasa,CA){
   crt = P1$Temporalidad
+  edad = P1$Edad
   if(is.na(crt)){
-    tabla2 = tabla%>%filter(tabla$Edad>=P1$Edad)
-  tem = length(tabla2$q)-7
-  }else{tem = crt-6}
+  tabla2 = tabla%>%filter(tabla$Edad>=P1$Edad)
+  tem = length(tabla2$q)-min(7,length(tabla2$q))
+  CA = CA[1:min(length(tabla2$q),6)]
+  }else{
+  crt = ifelse((100-edad)<crt,100-edad, crt)  
+  tem = crt-min(crt,6)
+  CA = CA[1:min(crt,6)]
+  }
   Cost1 = c(CA, rep(CA[6],times = tem))
   Costo  = c(CA, rep(CA[6],times = tem))
   Costo = Costo + (P1$GA + P1$MU)
