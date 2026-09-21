@@ -300,7 +300,7 @@ Prima_tarifa_d = function(P1,tabla,tasa,CA){
 ################################################
 #################Tabla CNSF 2013 hasta edad 100
 ######En modo de muestra se encuentra una ruta local, se debe generar un repositorio y colocar la ruta respectiva
-BEL = function(P1,tabla,corte, anual = 0,ruta = "C:/Users/agarciadeleon/R_Studio/CSV/proyecto/RR4/Reservas/Cancelacion.xlsx"){
+BEL = function(P1,tabla,corte, anual = 0, ruta = "C:/Users/agarciadeleon/R_Studio/CSV/proyecto/RR4/Reservas/Cancelacion.xlsx", tasa = "C:/Users/agarciadeleon/R_Studio/CSV/proyecto/RR4/Reservas/m_tasadescuento_202512.csv"){
   edad = P1$Edad
   if(P1$Producto == "Dotal"){
     cancelacion = read_excel(ruta, 
@@ -313,18 +313,21 @@ BEL = function(P1,tabla,corte, anual = 0,ruta = "C:/Users/agarciadeleon/R_Studio
                              sheet = "temporal")
   }
   crt = P1$Temporalidad
-  tasa1 = 0.06
   if(anual == 0){
     tabla  =Mensualizar(tabla)
+    #tasa1 <- rep(0.06,times = length(tabla$Edad))
+    tasa1 = read_csv(tasa)
+    tasa1 = tasa1$Pesos
     cancelacion =  Mensualizar_Canc(cancelacion)
     prima = P1$PT_Niv/12
     crt = crt*12
     crt1 = (100-edad)*12
     tasa1 = -1+(1+tasa1)^(1/12)
   }else{
+    tasa1 = rep(0.06,times = length(tabla$Edad))
     crt1 = 100-edad
   prima = P1$PT_Niv}
-  ######
+  ####################################
   Resultado = data.frame(Edad = tabla$Edad)
   Resultado$p = tabla$p
   Resultado$q = tabla$q
@@ -341,8 +344,8 @@ BEL = function(P1,tabla,corte, anual = 0,ruta = "C:/Users/agarciadeleon/R_Studio
   Auxiliar2 = cancelacion
   Auxiliar2 = Auxiliar2[c(1:length(Resultado$Edad)),]
   Resultado$caducidad = Auxiliar2$Nacional
-  Resultado$tasa  =tasa1
-  Resultado$v = 1/(1+tasa1)
+  Resultado$tasa  =tasa1[c(1:length(Resultado$Edad))]
+  Resultado$v = 1/(1+Resultado$tasa)
   n = length(Resultado$Edad)
   Resultado$v_venc = mapply(function(x,y){y^(x+1)},x = seq(from = 0, to = (n-1)), y = Resultado$v)
   Resultado$v_ant = mapply(function(x,y){y^(x)},x = seq(from = 0, to = (n-1)), y = Resultado$v)
@@ -360,8 +363,7 @@ Resultado$FE_sin = Resultado$SA * Resultado$q * Resultado$p_t
 Resultado$VPE_sin = 0
 
 for(k in 1:n){
-  R <- Resultado$v_venc[1:(n-k+1)] *
-    Resultado$FE_sin[k:n]
+  R <- Resultado$v_venc[1:(n-k+1)] *Resultado$FE_sin[k:n]
   Resultado$VPE_sin[k] <- sum(R)
 }
 if(P1$Producto == "Temporal"){
@@ -402,21 +404,21 @@ for(k in 1:n){
 }
 return(Resultado)
 }
-
-BEL_corte = function(P1,tabla,corte, anual = 0,ruta){
+####################################################################
+BEL_corte = function(P1,tabla,corte, anual = 0,ruta = "C:/Users/agarciadeleon/R_Studio/CSV/proyecto/RR4/Reservas/Cancelacion.xlsx", tasa = "C:/Users/agarciadeleon/R_Studio/CSV/proyecto/RR4/Reservas/m_tasadescuento_202512.csv"){
   valuacion = corte
   t = round(time_length(interval(P1$`Inicio de vigencia`,valuacion),"years"),2)
   edad = P1$Edad
   val = edad + t
   l = list()
-  D = BEL(P1,tabla,corte, anual,ruta)
+  D = BEL(P1,tabla,corte, anual,ruta,tasa)
   suppressMessages({ D = D  %>%
     filter(Edad <= val) %>%
     slice_max(Edad, n = 1)})
    return(D)
 }
 
-Calcula_BEL <- function(Polisario, tabla, corte,anual =1,ruta){
+Calcula_BEL <- function(Polisario, tabla, corte,anual =1,ruta = "C:/Users/agarciadeleon/R_Studio/CSV/proyecto/RR4/Reservas/Cancelacion.xlsx",tasa = "C:/Users/agarciadeleon/R_Studio/CSV/proyecto/RR4/Reservas/m_tasadescuento_202512.csv"){
   suppressMessages({ Resultado <- lapply(
     seq_len(nrow(Polisario)),
     function(i)
@@ -425,7 +427,8 @@ Calcula_BEL <- function(Polisario, tabla, corte,anual =1,ruta){
         tabla,
         corte,
         anual,
-        ruta
+        ruta,
+        tasa
       )
   )})
   Resultado <- bind_rows(Resultado)
@@ -435,9 +438,9 @@ Calcula_BEL <- function(Polisario, tabla, corte,anual =1,ruta){
 }
 
 
-BEL_IRR = function(Polisario, tabla,Percentil, corte,anual  =1,ruta){
+BEL_IRR = function(Polisario, tabla,Percentil, corte,anual  =1,ruta = "C:/Users/agarciadeleon/R_Studio/CSV/proyecto/RR4/Reservas/Cancelacion.xlsx",tasa = "C:/Users/agarciadeleon/R_Studio/CSV/proyecto/RR4/Reservas/m_tasadescuento_202512.csv"){
   valuacion = corte
-  Res = Calcula_BEL(Polisario, tabla, corte,anual,ruta)
+  Res = Calcula_BEL(Polisario, tabla, corte,anual,ruta,tasa)
   Res$BEL = Res$VPE_sin + Res$VPE_gtos + Res$VPE_dotal -Res$VPE_ingresos
   Res$Suma_cedida = ifelse(Res$`Suma Asegurada`>=2000000,Res$`Suma Asegurada`-2000000,Res$`Suma Asegurada`)
   Res$Porcentaje_cesion = Res$Suma_cedida/Res$`Suma Asegurada`
@@ -449,7 +452,7 @@ BEL_IRR = function(Polisario, tabla,Percentil, corte,anual  =1,ruta){
   BEL_f =Res
   ####Desviacion
   tabla1 = Percentil
-  Res1 = Calcula_BEL(Polisario, tabla1, corte,anual,ruta)
+  Res1 = Calcula_BEL(Polisario, tabla1, corte,anual,tasa)
   Res1$BEL = Res1$VPE_sin + Res1$VPE_gtos + Res1$VPE_dotal -Res1$VPE_ingresos
   BEL_Final_Percentil = Res1
   BEL_f$BEL_PERCENTIL = Res1$BEL
